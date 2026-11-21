@@ -1,0 +1,109 @@
+import { calculateDuration, timeToMinutes, minutesToTime } from "./timeUtils.js";
+import { validateAvailability } from "./validation.js";
+import { sortTasks } from "./priority.js";
+
+function calculateSessionDuration(remainingMinutes, slot) {
+  // Step 1: Calculate the duration of the slot
+  // Hint: You already have calculateDuration()
+  const duration = calculateDuration(slot.start, slot.end);
+  // Step 2: Compare remaining task duration
+  // with available slot duration
+  // Step 3: Return the smaller value
+  return Math.min(duration, remainingMinutes);
+}
+
+function createSession(task, slot, remainingMinutes) {
+  // Step 1: Calculate how many minutes
+  // of the task can fit in the slot
+  const sessionDuration = calculateSessionDuration(remainingMinutes, slot);
+
+  // Step 2: Convert slot.start into minutes
+  const start = timeToMinutes(slot.start);
+
+  // Step 3: Calculate session end time
+  // end = start + sessionDuration
+  let end = start + sessionDuration;
+
+  // Step 4: Convert end time back to HH:MM
+  end = minutesToTime(end);
+
+  // Step 5: Return a session object
+  return {
+    taskId: task.id,
+    title: task.title,
+    start: slot.start,
+    end: end,
+    durationMinutes: sessionDuration,
+  };
+}
+
+function generateSchedule(tasks, availability, today) {
+  // Step 1: Validate availability
+  if (!validateAvailability(availability)) {
+    throw new Error("Invalid availability slots");
+  }
+
+  // Step 2: Sort tasks by priority
+  const sortedTasks = sortTasks(tasks, today);
+
+  // Step 3: Copy availability
+  const copiedSlots = availability.map((slot) => ({ ...slot }));
+
+  // Step 4: Sort slots by starting time
+  copiedSlots.sort((a, b) => {
+    return timeToMinutes(a.start) - timeToMinutes(b.start);
+  });
+
+  // Step 5: Create empty schedule
+  const schedule = [];
+
+  const unscheduledTasks = [];
+
+  // Step 6: Loop through sorted tasks
+  for (const task of sortedTasks) {
+    // Step 7: Store remaining task duration
+    let remainingMinutes = task.estimatedMinutes;
+
+    // Step 8: Loop through available slots
+    for (const slot of copiedSlots) {
+      // We'll add scheduling logic here next
+      if (remainingMinutes === 0) {
+        break;
+      }
+
+      if (calculateDuration(slot.start, slot.end) <= 0) {
+        continue;
+      }
+      const session = createSession(task, slot, remainingMinutes);
+
+      schedule.push(session);
+
+      remainingMinutes = remainingMinutes - session.durationMinutes;
+
+      slot.start = slot.end;
+    }
+
+    // Step 9: If the task still has remaining time,
+    // add it to unscheduledTasks
+    if (remainingMinutes > 0) {
+      unscheduledTasks.push({
+        taskId: task.id,
+        title: task.title,
+        remainingMinutes: remainingMinutes,
+      });
+    }
+  }
+
+  return {
+    sortedTasks,
+    availableSlots: copiedSlots,
+    schedule,
+    unscheduledTasks,
+  };
+}
+
+export {
+  calculateSessionDuration,
+  createSession,
+  generateSchedule,
+}
