@@ -1,6 +1,7 @@
 import { calculateDuration, timeToMinutes, minutesToTime } from "./timeUtils.js";
 import { validateAvailability } from "./validation.js";
 import { sortTasks } from "./priority.js";
+import { isValidTask } from "./taskValidation.js";
 
 function calculateSessionDuration(remainingMinutes, slot) {
   // Step 1: Calculate the duration of the slot
@@ -38,9 +39,22 @@ function createSession(task, slot, remainingMinutes) {
 }
 
 function generateSchedule(tasks, availability, today) {
-  // Step 1: Validate availability
+  if (!Array.isArray(tasks)) {
+    throw new Error("Tasks must be an array");
+  }
+
+  if (!Array.isArray(availability)) {
+    throw new Error("Availability must be an array");
+  }
+  
   if (!validateAvailability(availability)) {
     throw new Error("Invalid availability slots");
+  }
+
+  for (const task of tasks) {
+    if (!isValidTask(task)) {
+      throw new Error("Invalid task");
+    }
   }
 
   // Step 2: Sort tasks by priority
@@ -80,7 +94,7 @@ function generateSchedule(tasks, availability, today) {
 
       remainingMinutes = remainingMinutes - session.durationMinutes;
 
-      slot.start = slot.end;
+      slot.start = session.end;
     }
 
     // Step 9: If the task still has remaining time,

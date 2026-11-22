@@ -1,6 +1,18 @@
 import { timeToMinutes } from "./timeUtils.js";
 
 function isValidSlot(slot) {
+
+  if (
+    typeof slot !== "object" ||
+    Array.isArray(slot)
+  ) {
+    return false;
+  }
+
+  if (!isValidTime(slot.start) ||
+    !isValidTime(slot.end)) {
+    return false
+  }
   // Step 1: Convert start time to minutes
   // Step 2: Convert end time to minutes
   const startMin = timeToMinutes(slot.start);
@@ -25,6 +37,10 @@ function hasOverlap(slotA, slotB) {
 }
 
 function validateAvailability(availability) {
+  if (!Array.isArray(availability)) {
+    return false;
+  }
+
   // Step 1: Check whether every slot is valid
   for (let i = 0; i < availability.length; i++) {
     if (!isValidSlot(availability[i])) {
@@ -44,8 +60,33 @@ function validateAvailability(availability) {
   return true;
 }
 
+function isValidTime(time) {
+  if (typeof time !== "string") {
+    return false;
+  }
+
+  const regex = /^\d{2}:\d{2}$/
+
+  if (!regex.test(time)) {
+    return false;
+  }
+
+  const parts = time.split(":");
+
+  const hrs = Number(parts[0]);
+  const mins = Number(parts[1]);
+
+  return (
+    hrs >= 0 &&
+    hrs <= 23 &&
+    mins >= 0 &&
+    mins <= 59
+  );
+}
+
 export {
   validateAvailability,
   hasOverlap,
-  isValidSlot
+  isValidSlot,
+  isValidTime
 };
