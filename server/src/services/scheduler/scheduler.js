@@ -3,14 +3,14 @@ import { validateAvailability } from "./validation.js";
 import { sortTasks } from "./priority.js";
 import { isValidTask } from "./taskValidation.js";
 
-function calculateSessionDuration(remainingMinutes, slot) {
+function calculateSessionDuration(remainingMinutes, slot, maxSessionMinutes = 60) {
   // Step 1: Calculate the duration of the slot
   // Hint: You already have calculateDuration()
   const duration = calculateDuration(slot.start, slot.end);
   // Step 2: Compare remaining task duration
   // with available slot duration
   // Step 3: Return the smaller value
-  return Math.min(duration, remainingMinutes);
+  return Math.min(duration, remainingMinutes, maxSessionMinutes);
 }
 
 function createSession(task, slot, remainingMinutes) {
@@ -46,7 +46,7 @@ function generateSchedule(tasks, availability, today) {
   if (!Array.isArray(availability)) {
     throw new Error("Availability must be an array");
   }
-  
+
   if (!validateAvailability(availability)) {
     throw new Error("Invalid availability slots");
   }
@@ -85,16 +85,30 @@ function generateSchedule(tasks, availability, today) {
         break;
       }
 
-      if (calculateDuration(slot.start, slot.end) <= 0) {
-        continue;
+      while (
+        remainingMinutes > 0 &&
+        calculateDuration(slot.start, slot.end) > 0
+      ) {
+        const session = createSession(task, slot, remainingMinutes);
+
+        schedule.push(session);
+
+        remainingMinutes -= session.durationMinutes;
+
+        slot.start = session.end;
+
+        const breakDuration = calculateBreakDuration(session.durationMinutes);
+
+        if (
+          remainingMinutes > 0 &&
+          breakDuration > 0 &&
+          calculateDuration(slot.start, slot.end) >= breakDuration
+        ) {
+          const breakSession = createBreakSession(slot.start, breakDuration);
+          schedule.push(breakSession);
+          slot.start = breakSession.end;
+        }
       }
-      const session = createSession(task, slot, remainingMinutes);
-
-      schedule.push(session);
-
-      remainingMinutes = remainingMinutes - session.durationMinutes;
-
-      slot.start = session.end;
     }
 
     // Step 9: If the task still has remaining time,
@@ -114,6 +128,28 @@ function generateSchedule(tasks, availability, today) {
     schedule,
     unscheduledTasks,
   };
+}
+
+
+function calculateBreakDuration(sessionDuration, breakMinutes = 10, maxSessionMinutes = 60) {
+  if (sessionDuration === maxSessionMinutes) {
+    return breakMinutes;
+  } else {
+    return 0;
+  }
+}
+
+function createBreakSession(startTime, breakDuration) {
+  const startMins = timeToMinutes(startTime) + breakDuration;
+  const endTime = minutesToTime(startMins);
+
+  return ({
+    "type": "break",
+    "title": "Short Break",
+    "start": startTime,
+    "end": endTime,
+    "durationMinutes": breakDuration
+  });
 }
 
 export {
