@@ -1,9 +1,20 @@
 import express from "express";
 import scheduleRoutes from "./routes/scheduleRoutes.js";
+import dotenv from 'dotenv';
+import connectDB from "./config/db.js";
 
 const app = express();
 
 app.use(express.json());
+dotenv.config();
+
+await connectDB();
+
+const PORT = process.env.PORT || 5000;
+
+app.listen(PORT, () => {
+  console.log(`Server is running on port ${PORT}`);
+});
 
 app.use("/api/schedule", scheduleRoutes);
 
@@ -17,8 +28,4 @@ app.get("/api/status", (req, res) => {
     message: "Smart Study Planner API is working",
     version: "1.0.0"
   });
-});
-
-app.listen(5000, () => {
-  console.log("Server is running on port 5000");
 });
