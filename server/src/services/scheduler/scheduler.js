@@ -4,31 +4,32 @@ import { sortTasks } from "./priority.js";
 import { isValidTask } from "./taskValidation.js";
 
 function calculateSessionDuration(remainingMinutes, slot, maxSessionMinutes = 60) {
-  // Step 1: Calculate the duration of the slot
-  // Hint: You already have calculateDuration()
   const duration = calculateDuration(slot.start, slot.end);
-  // Step 2: Compare remaining task duration
-  // with available slot duration
-  // Step 3: Return the smaller value
   return Math.min(duration, remainingMinutes, maxSessionMinutes);
 }
 
-function createSession(task, slot, remainingMinutes) {
-  // Step 1: Calculate how many minutes
-  // of the task can fit in the slot
-  const sessionDuration = calculateSessionDuration(remainingMinutes, slot);
+function calculateAllowedSessionDuration(
+  remainingMinutes,
+  slot,
+  continuousMinutes,
+  maxSessionMinutes = 60
+) {
+  const allowedMinutes = maxSessionMinutes - continuousMinutes;
 
-  // Step 2: Convert slot.start into minutes
+  const sessionDuration = calculateSessionDuration(remainingMinutes, slot, maxSessionMinutes);
+
+  return Math.max(0, Math.min(allowedMinutes, sessionDuration));
+}
+
+function createSession(task, slot, remainingMinutes, continuousMinutes = 0) {
+  const sessionDuration = calculateAllowedSessionDuration(remainingMinutes, slot, continuousMinutes);
+
   const start = timeToMinutes(slot.start);
 
-  // Step 3: Calculate session end time
-  // end = start + sessionDuration
   let end = start + sessionDuration;
 
-  // Step 4: Convert end time back to HH:MM
   end = minutesToTime(end);
 
-  // Step 5: Return a session object
   return {
     taskId: task.id,
     title: task.title,
@@ -36,6 +37,59 @@ function createSession(task, slot, remainingMinutes) {
     end: end,
     durationMinutes: sessionDuration,
   };
+}
+
+function hasNaturalBreak(
+  previousEnd,
+  currentStart,
+  breakMinutes = 10
+) {
+  const gap = calculateDuration(previousEnd, currentStart);
+
+  return gap >= breakMinutes;
+}
+
+function calculateContinuousStudyTime(schedule, currentStart) {
+  let total = 0;
+  let nextStart = currentStart;
+
+  for (let i = schedule.length - 1; i >= 0; i--) {
+    if (schedule[i].type === "break") {
+      break;
+    } else if (hasNaturalBreak(schedule[i].end, nextStart)) {
+      break;
+    }
+    total += schedule[i].durationMinutes;
+    nextStart = schedule[i].start;
+  }
+  return total;
+}
+
+function shouldTakeBreak(continuousMinutes, maxSessionMinutes = 60) {
+  return continuousMinutes >= maxSessionMinutes;
+}
+
+function createBreakSession(startTime, breakDuration) {
+  const startMins = timeToMinutes(startTime) + breakDuration;
+  const endTime = minutesToTime(startMins);
+
+  return ({
+    "type": "break",
+    "title": "Short Break",
+    "start": startTime,
+    "end": endTime,
+    "durationMinutes": breakDuration
+  });
+}
+
+function sortSchedule(schedule) {
+  const scheduleCopy = [...schedule];
+
+  scheduleCopy.sort((a, b) => {
+    return timeToMinutes(a.start) - timeToMinutes(b.start)
+  });
+
+  return scheduleCopy;
 }
 
 function generateSchedule(tasks, availability, today) {
@@ -57,30 +111,22 @@ function generateSchedule(tasks, availability, today) {
     }
   }
 
-  // Step 2: Sort tasks by priority
   const sortedTasks = sortTasks(tasks, today);
 
-  // Step 3: Copy availability
   const copiedSlots = availability.map((slot) => ({ ...slot }));
 
-  // Step 4: Sort slots by starting time
   copiedSlots.sort((a, b) => {
     return timeToMinutes(a.start) - timeToMinutes(b.start);
   });
 
-  // Step 5: Create empty schedule
   const schedule = [];
 
   const unscheduledTasks = [];
 
-  // Step 6: Loop through sorted tasks
   for (const task of sortedTasks) {
-    // Step 7: Store remaining task duration
     let remainingMinutes = task.estimatedMinutes;
 
-    // Step 8: Loop through available slots
     for (const slot of copiedSlots) {
-      // We'll add scheduling logic here next
       if (remainingMinutes === 0) {
         break;
       }
@@ -89,30 +135,35 @@ function generateSchedule(tasks, availability, today) {
         remainingMinutes > 0 &&
         calculateDuration(slot.start, slot.end) > 0
       ) {
-        const session = createSession(task, slot, remainingMinutes);
+        const continuousMinutes = calculateContinuousStudyTime(schedule, slot.start);
+
+        if (shouldTakeBreak(continuousMinutes)) {
+          if (calculateDuration(slot.start, slot.end) >= 10) {
+            const breakSession = createBreakSession(slot.start, 10);
+            schedule.push(breakSession);
+            slot.start = breakSession.end;
+            continue;
+          } else {
+            slot.start = slot.end;
+            break;
+          }
+        }
+
+        const session = createSession(task, slot, remainingMinutes, continuousMinutes);
+
+        if (!Number.isFinite(session.durationMinutes) ||
+          session.durationMinutes <= 0) {
+          slot.start = slot.end;
+          break;
+        }
 
         schedule.push(session);
 
         remainingMinutes -= session.durationMinutes;
-
         slot.start = session.end;
-
-        const breakDuration = calculateBreakDuration(session.durationMinutes);
-
-        if (
-          remainingMinutes > 0 &&
-          breakDuration > 0 &&
-          calculateDuration(slot.start, slot.end) >= breakDuration
-        ) {
-          const breakSession = createBreakSession(slot.start, breakDuration);
-          schedule.push(breakSession);
-          slot.start = breakSession.end;
-        }
       }
     }
 
-    // Step 9: If the task still has remaining time,
-    // add it to unscheduledTasks
     if (remainingMinutes > 0) {
       unscheduledTasks.push({
         taskId: task.id,
@@ -125,35 +176,18 @@ function generateSchedule(tasks, availability, today) {
   return {
     sortedTasks,
     availableSlots: copiedSlots,
-    schedule,
+    schedule: sortSchedule(schedule),
     unscheduledTasks,
   };
 }
 
-
-function calculateBreakDuration(sessionDuration, breakMinutes = 10, maxSessionMinutes = 60) {
-  if (sessionDuration === maxSessionMinutes) {
-    return breakMinutes;
-  } else {
-    return 0;
-  }
-}
-
-function createBreakSession(startTime, breakDuration) {
-  const startMins = timeToMinutes(startTime) + breakDuration;
-  const endTime = minutesToTime(startMins);
-
-  return ({
-    "type": "break",
-    "title": "Short Break",
-    "start": startTime,
-    "end": endTime,
-    "durationMinutes": breakDuration
-  });
-}
-
 export {
   calculateSessionDuration,
+  calculateAllowedSessionDuration,
   createSession,
+  hasNaturalBreak,
+  calculateContinuousStudyTime,
+  shouldTakeBreak,
+  sortSchedule,
   generateSchedule,
 }
