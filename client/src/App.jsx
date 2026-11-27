@@ -1,11 +1,13 @@
 import "./App.css";
+import Dashboard from "./pages/Dashboard";
+import MainLayout from "./components/layout/MainLayout";
+import "./styles/layout.css";
 
 function App() {
   return (
-    <div>
-      <h1>Smart Study Planner</h1>
-      <p>Plan smarter, study better.</p>
-    </div>
+    <MainLayout>
+      <Dashboard />
+    </MainLayout>
   );
 }
 
